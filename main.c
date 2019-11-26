@@ -131,6 +131,28 @@ static struct wl_buffer *create_buffer() {
 	return buffer;
 }
 
+static void frame_handle_done(void *data, struct wl_callback *callback,
+		uint32_t time);
+
+struct context {
+	struct wl_display *display;
+	struct wl_surface *surface;
+};
+
+const struct wl_callback_listener frame_listener = {
+	.done = frame_handle_done,
+};
+
+static void frame_handle_done(void *data, struct wl_callback *callback,
+		uint32_t time) {
+	struct context *ctx = (struct context*)data;
+	wl_callback_destroy(callback);
+	callback = wl_surface_frame(ctx->surface);
+	wl_callback_add_listener(callback, &frame_listener, data);
+	wl_surface_commit(ctx->surface);
+	wl_display_flush(ctx->display);
+}
+
 int main(int argc, char *argv[]) {
 	struct wl_display *display = wl_display_connect(NULL);
 	if (display == NULL) {
@@ -163,7 +185,11 @@ int main(int argc, char *argv[]) {
 	wl_surface_commit(surface);
 	wl_display_roundtrip(display);
 
+	struct context ctx = {display, surface};
+
 	wl_surface_attach(surface, buffer, 0, 0);
+	struct wl_callback *callback = wl_surface_frame(surface);
+	wl_callback_add_listener(callback, &frame_listener, &ctx);
 	wl_surface_commit(surface);
 
 	while (wl_display_dispatch(display) != -1 && running) {
